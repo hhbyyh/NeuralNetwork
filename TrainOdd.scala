@@ -16,6 +16,7 @@ object TrainOdd{
     Logger.getLogger("akka").setLevel(Level.WARN)
     val conf = new SparkConf().setAppName("Parallel ANN").setMaster("local[4]")
     val sc = new SparkContext(conf)
+    sc.setCheckpointDir("/home/yuhao/workspace/github/bgreeven/NeuralNetwork/output")
 
     val arr = new scala.collection.mutable.ArrayBuffer[(Vector, Vector)]()
 
@@ -24,7 +25,12 @@ object TrainOdd{
     arr += new Tuple2(Vectors.dense(1, 0), Vectors.dense(0))
     arr += new Tuple2(Vectors.dense(0, 0), Vectors.dense(0))
 
-    val ann = ANN.train(sc.parallelize(arr), Array(2), 15)
+    val startTime = System.nanoTime()
+    val ann = ANN.train(sc.parallelize(arr), Array(2), 100)
+    val elapsed = (System.nanoTime() - startTime) / 1e9
+
+    println(s"Finished training NN model.  Summary:")
+    println(s"\t Training time: $elapsed sec")
 
     var pre = ann.predict(Vectors.dense(1, 1))
     println(pre)
@@ -32,7 +38,5 @@ object TrainOdd{
     pre = ann.predict(Vectors.dense(0, 0))
     println(pre)
     sc.stop()
-
-    println(Calendar.getInstance().getTime)
   }
 }

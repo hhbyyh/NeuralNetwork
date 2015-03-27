@@ -87,37 +87,37 @@ class ANN private (private val trainingRDD: RDD[(Vector, Vector)],
     val data = trainingRDD.collect()
     while(i < maxIterations){
       var diff = 0.0
-      data.foreach(sample => {
-        val d = this.Epoch(sample._1, sample._2)
-        diff += d
+      for(i <- 1 to data.size){
+        val sample = data(i - 1)
+        val d = this.Epoch(sample._1, sample._2, i)
         println(d)
-      })
+        diff += d
+      }
+
+      graph.checkpoint()
       logError(s"iteration $i get " + diff)
       i += 1
     }
     println("forwardCount: " + forwardCount.value)
   }
 
-
-  def Epoch(input: Vector, output: Vector): Double = {
-    val preGraph = graph
-    graph.cache()
+  def Epoch(input: Vector, output: Vector, iter: Int): Double = {
+    val preGraph = graph.cache()
     assignInput(input)
     for(i <- 1 to (layersCount - 1)){
       forward(i)
     }
-    val diff = ComputeDeltaForLastLayer(output)
+    val diff = ComputeDeltaForOutputLayer(output)
 
     for(i <- layersCount until 2 by -1){
       backporgation(i)
     }
-    updateWeights()
-    preGraph.unpersist()
+    updateWeights(iter)
+    preGraph.unpersist(false)
     diff
   }
 
   private def assignInput(input: Vector): Unit = {
-
     val in = graph.vertices.context.parallelize(input.toArray.zipWithIndex)
     val inputRDD = in.map( x => (x._2 + 1, x._1)).map(x =>{
       val id = getVertexId(1, x._1)
@@ -169,8 +169,8 @@ class ANN private (private val trainingRDD: RDD[(Vector, Vector)],
     }
   }
 
-  private def updateWeights(): Unit ={
-    val eta = 10
+  private def updateWeights(iter: Int): Unit ={
+    val eta = 10 * math.pow(iter, 0.5)
 
     graph = graph.mapTriplets(triplet =>{
       val delta = triplet.dstAttr._4
@@ -181,7 +181,7 @@ class ANN private (private val trainingRDD: RDD[(Vector, Vector)],
     })
   }
 
-  private def ComputeDeltaForLastLayer(output: Vector): Double ={
+  private def ComputeDeltaForOutputLayer(output: Vector): Double ={
     var sampleDelta = graph.vertices.sparkContext.accumulator(0.0)
     graph = graph.mapVertices( (id, attr) => {
       if(attr._1 != layersCount){
